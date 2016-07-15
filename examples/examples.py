@@ -1,10 +1,11 @@
 #! /usr/bin/python3
 # -*- encoding: utf-8 -*-
 
-__author__ = 'fyabc'
-
+from __future__ import print_function
 import theano.tensor as T
 from theano import function, In, shared
+
+__author__ = 'fyabc'
 
 
 def getLogistic():
@@ -65,6 +66,10 @@ def copyFunc():
 
     print(nullAcc(1000))
     print(state.get_value())
+
+
+def randomState():
+    pass
 
 
 def main():
