@@ -1,11 +1,13 @@
 #! /usr/bin/python3
 # -*- encoding: utf-8 -*-
 
-__author__ = 'fyabc'
+from __future__ import print_function, unicode_literals
 
 import theano
 import theano.tensor as T
 import numpy as np
+
+__author__ = 'fyabc'
 
 
 def main():

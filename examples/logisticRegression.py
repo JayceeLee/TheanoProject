@@ -1,8 +1,7 @@
 #! /usr/bin/python3
 # -*- encoding: utf-8 -*-
 
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import print_function, unicode_literals
 
 import numpy as np
 import theano

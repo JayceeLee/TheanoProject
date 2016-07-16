@@ -1,14 +1,21 @@
 #! /usr/bin/python3
 # -*- encoding: utf-8 -*-
 
-__author__ = 'fyabc'
+from __future__ import print_function, unicode_literals
 
-import cPickle as pkl
 import gzip
 
 import numpy as np
 import theano as tn
 import theano.tensor as T
+
+from sys import version_info
+if version_info.major < 3:
+    import cPickle as pkl
+else:
+    import pickle as pkl
+
+__author__ = 'fyabc'
 
 
 def getMNIST():

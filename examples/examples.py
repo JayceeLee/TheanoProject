@@ -1,7 +1,8 @@
 #! /usr/bin/python3
 # -*- encoding: utf-8 -*-
 
-from __future__ import print_function
+from __future__ import print_function, unicode_literals
+
 import theano.tensor as T
 from theano import function, In, shared
 
@@ -82,9 +83,9 @@ def main():
     # defaultVal = defaultValue()
     # print(defaultVal(33, namedZ=14, y=-32))
     #
-    # sharedVar()
-
-    copyFunc()
+    sharedVar()
+    #
+    # copyFunc()
 
 if __name__ == '__main__':
     main()
