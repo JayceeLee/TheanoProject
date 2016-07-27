@@ -55,12 +55,33 @@ def getHessian():
     print(f([4, 7]))
 
 
+def JacobiTimesVector():
+    W, V = T.dmatrices(['W', 'V'])
+    x = T.dvector('x')
+    y = T.dot(x, W)
+    JV = T.Rop(y, W, V)
+    f = function([W, V, x], JV)
+    print(f(
+        [[1, 1], [1, 1]],
+        [[2, 2], [2, 2]],
+        [0, 1]
+    ))
+
+    v = T.dvector('v')
+    VJ = T.Lop(y, W, v)
+    fL = function([v, x], VJ)
+    print(fL(
+        [2, 2],
+        [0, 1]
+    ))
+
+
 def main():
     # derivative()
     # gradSigmoid()
     # getJacobian()
-    getHessian()
-
+    # getHessian()
+    JacobiTimesVector()
 
 if __name__ == '__main__':
     main()
