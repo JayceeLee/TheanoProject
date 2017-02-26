@@ -4,6 +4,7 @@
 from __future__ import print_function, unicode_literals
 
 import gzip
+import os
 
 import numpy as np
 import theano as tn
@@ -19,7 +20,13 @@ __author__ = 'fyabc'
 
 
 def getMNIST():
-    f = gzip.open('data/mnist.pkl.gz', 'rb')
+    data_path = 'data/mnist.pkl.gz'
+
+    if not os.path.exists(data_path):
+        print('MNIST dataset not found, please download it.')
+        exit(1)
+
+    f = gzip.open(data_path, 'rb')
     trainSet, validSet, testSet = pkl.load(f)   # , encoding='latin1')
     f.close()
     return trainSet, validSet, testSet

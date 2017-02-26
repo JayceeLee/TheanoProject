@@ -90,3 +90,7 @@ ENV/
 
 # Pycharm Project Settings
 .idea/
+
+# Data
+data/
+!data/stub.txt
