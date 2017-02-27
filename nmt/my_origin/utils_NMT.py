@@ -11,6 +11,9 @@ from utils import fX
 __author__ = 'fyabc'
 
 
+Profile = False
+
+
 def p_(prefix, name):
     """Get the name of tensor with the prefix (layer name) and variable name."""
     return '{}_{}'.format(prefix, name)

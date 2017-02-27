@@ -16,6 +16,14 @@ def floatX(value):
     return np.asarray(value, dtype=fX)
 
 
+def message(*args, **kwargs):
+    print(*args, **kwargs)
+
+
+Config = {
+
+}
+
 NMTConfig = {
 
 }
