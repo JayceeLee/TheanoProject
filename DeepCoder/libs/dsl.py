@@ -3,18 +3,12 @@
 
 from __future__ import print_function, unicode_literals
 
-from collections import defaultdict
+import operator
 from types import StringTypes
 
+from dsl_types import INT, LIST, INT2INT, INT2BOOL, INT2INT2INT, Type2String
+
 __author__ = 'fyabc'
-
-
-# Type ID constants
-INT = 0             # Data type: int
-LIST = 1            # Data type: [int]
-INT2INT = 2         # Lambda type: int -> int
-INT2BOOL = 3        # Lambda type: int -> bool
-INT2INT2INT = 4     # Lambda type: int -> int -> int
 
 
 class MapToId(object):
@@ -23,6 +17,7 @@ class MapToId(object):
     _AllInstances = []
 
     def __init__(self):
+        self.id = len(self._AllInstances)
         self._AllInstances.append(self)
 
     @classmethod
@@ -51,9 +46,6 @@ class Function(MapToId):
         return self.name
 
     __repr__ = __str__
-
-    def repr_call(self, args):
-        return '{}({})'.format(self, ', '.join(str(arg) for arg in args))
 
 
 class Data(object):
@@ -93,51 +85,90 @@ class Lambda(MapToId):
 class DSL(object):
     """The class of the DSL."""
 
-    # List of all function ids.
-    functions = []
-
-    # Table of all lambdas.
-    # Key: lambda type id
-    # Value: list of lambda ids
-    lambdas = defaultdict(list)
+    # Table of functions and lambdas. Used for user to simplify the creation of function
+    # Key: function or lambda name
+    # Value: function or lambda
+    functions_lambdas = {}
 
     @classmethod
-    def set_functions_lambdas(cls):
+    def _register_function(cls, name, **kwargs):
+        if kwargs.pop('is_lambda', False):
+            cls.functions_lambdas[name] = Lambda(name=name, **kwargs)
+        else:
+            cls.functions_lambdas[name] = Function(name=name, **kwargs)
+
+    @classmethod
+    def register_functions_lambdas(cls):
         """Set all functions and lambdas of the DSL."""
 
         # First-order functions
-        head = Function(
-            name='Head',
-            func=lambda xs: xs[0] if len(xs) > 0 else None,
-            arg_types=[LIST],
-            ret_type=INT,
-        )
-
-        last = Function(
-            name='Last',
-            func=lambda xs: xs[-1] if len(xs) > 0 else None,
-            arg_types=[LIST],
-            ret_type=INT,
-        )
-
-        take = Function(
-            name='Last',
-            func=lambda n, xs: xs[:n],
-            arg_types=[INT, LIST],
-            ret_type=LIST,
-        )
-
-        drop = Function(
-            name='Drop',
-            func=lambda n, xs: xs[n:],
-            arg_types=[INT, LIST],
-            ret_type=LIST,
-        )
+        cls._register_function('Head', func=lambda xs: xs[0] if len(xs) > 0 else None, arg_types=[LIST], ret_type=INT, )
+        cls._register_function('Last', func=lambda xs: xs[-1] if len(xs) > 0 else None, arg_types=[LIST], ret_type=INT, )
+        cls._register_function('Take', func=lambda n, xs: xs[:n], arg_types=[INT, LIST], ret_type=LIST, )
+        cls._register_function('Drop', func=lambda n, xs: xs[n:], arg_types=[INT, LIST], ret_type=LIST, )
+        cls._register_function('Access', func=lambda n, xs: xs[n] if 0 <= n < len(xs) else None, arg_types=[INT, LIST],
+                               ret_type=LIST, )
+        cls._register_function('Minimum', func=lambda xs: min(xs) if xs else None, arg_types=[LIST], ret_type=INT, )
+        cls._register_function('Maximum', func=lambda xs: max(xs) if xs else None, arg_types=[LIST], ret_type=INT, )
+        cls._register_function('Reverse', func=lambda xs: list(reversed(xs)), arg_types=[LIST], ret_type=LIST, )
+        cls._register_function('Sort', func=sorted, arg_types=[LIST], ret_type=LIST, )
+        cls._register_function('Sum', func=sum, arg_types=[LIST], ret_type=INT, )
 
         # High-order functions
+        cls._register_function('Map', func=map, arg_types=[INT2INT, LIST], ret_type=LIST, )
+        cls._register_function('Filter', func=filter, arg_types=[INT2BOOL, LIST], ret_type=LIST, )
+        cls._register_function('Count', func=lambda f, xs: len(filter(f, xs)), arg_types=[INT2INT, LIST], ret_type=LIST)
+        cls._register_function('ZipWith', func=lambda f, xs, ys: [f(x, y) for x, y in zip(xs, ys)],
+                               arg_types=[INT2INT2INT, LIST, LIST], ret_type=LIST)
+
+        def _scanl1(f, xs):
+            if not xs:
+                return []
+            ys = [xs[0]]
+
+            for i in range(1, len(xs)):
+                ys.append(f(ys[-1], xs[i]))
+
+            return ys
+        cls._register_function('Scanl1', func=_scanl1, arg_types=[INT2INT2INT, LIST], ret_type=LIST, )
+
+        # Lambdas
+        cls._register_function('(+1)', func=lambda x: x + 1, type_=INT2INT, is_lambda=True, )
+        cls._register_function('(-1)', func=lambda x: x - 1, type_=INT2INT, is_lambda=True, )
+        cls._register_function('(*2)', func=lambda x: x * 2, type_=INT2INT, is_lambda=True, )
+        cls._register_function('(/2)', func=lambda x: x // 2, type_=INT2INT, is_lambda=True, )
+        cls._register_function('(*(-1))', func=lambda x: x * -1, type_=INT2INT, is_lambda=True, )
+        cls._register_function('(**2)', func=lambda x: x ** 2, type_=INT2INT, is_lambda=True, )
+        cls._register_function('(*3)', func=lambda x: x * 3, type_=INT2INT, is_lambda=True, )
+        cls._register_function('(/3)', func=lambda x: x // 3, type_=INT2INT, is_lambda=True, )
+        cls._register_function('(*4)', func=lambda x: x * 4, type_=INT2INT, is_lambda=True, )
+        cls._register_function('(/4)', func=lambda x: x // 4, type_=INT2INT, is_lambda=True, )
+
+        cls._register_function('(>0)', func=lambda x: x > 0, type_=INT2BOOL, is_lambda=True, )
+        cls._register_function('(<0)', func=lambda x: x < 0, type_=INT2BOOL, is_lambda=True, )
+        cls._register_function('(%2==0)', func=lambda x: x % 2 == 0, type_=INT2BOOL, is_lambda=True, )
+        cls._register_function('(%2==1)', func=lambda x: x % 2 == 1, type_=INT2BOOL, is_lambda=True, )
+
+        cls._register_function('(+)', func=operator.add, type_=INT2INT2INT, is_lambda=True, )
+        cls._register_function('(-)', func=operator.sub, type_=INT2INT2INT, is_lambda=True, )
+        cls._register_function('(*)', func=operator.mul, type_=INT2INT2INT, is_lambda=True, )
+        cls._register_function('Min', func=lambda x, y: min((x, y)), type_=INT2INT2INT, is_lambda=True, )
+        cls._register_function('Max', func=lambda x, y: max((x, y)), type_=INT2INT2INT, is_lambda=True, )
+
+DSL.register_functions_lambdas()
 
 
-DSL.set_functions_lambdas()
+class Variable(object):
+    """The class of variable."""
+
+    def __init__(self, name, index=None):
+        self.name = name
+        self.index = index
+
+    def __str__(self):
+        return self.name
+
+    __repr__ = __str__
 
 
 class Statement(object):
@@ -151,6 +182,8 @@ class Statement(object):
         :param arg_list: list
             Arguments.
             Argument may be int (lambda id) or string (variable name)
+            NOTE: String variables will be replaced into indices in program.
+            String representation is used for human users.
         :param ret: str
             Return variable name.
         """
@@ -158,22 +191,69 @@ class Statement(object):
         self.function = function
         self.arg_list = arg_list
 
+    def var_name_to_index(self, var_index_map):
+        """Transform variable name to variable index in program variables."""
+
+        for i, arg in enumerate(self.arg_list):
+            if isinstance(arg, StringTypes):
+                try:
+                    self.arg_list[i] = var_index_map[arg]
+                except KeyError:
+                    print('Unknown variable "{}"'.format(arg))
+                    raise
+
+        if isinstance(self.ret, StringTypes):
+            self.ret = var_index_map[self.ret]
+
     def run(self, variables):
         """Run the statement, add the result to `variables`
 
         :param variables: Variable table
         """
 
-        variables[self.ret] = Function.get(self.function)([
-            variables[arg] if isinstance(arg, StringTypes) else Lambda.get(arg)
-            for arg in self.arg_list
-        ])
+        variables.append(Function.get(self.function)([
+                                                         variables[arg.index] if isinstance(arg,
+                                                                                            Variable) else Lambda.get(
+                                                             arg)
+                                                         for arg in self.arg_list
+                                                         ]))
+
+    @classmethod
+    def from_string(cls, string):
+        """Parse a string to a statement.
+
+        String format:
+            a = Filter (>0) x
+        """
+
+        ret, body = string.split('=')
+        ret = ret.strip()
+
+        function_and_args = body.strip().split(' ')
+        function = function_and_args[0]
+        args = function_and_args[1:]
+
+        return cls(
+            function=DSL.functions_lambdas[function].id,
+            arg_list=[DSL.functions_lambdas[arg].id if arg in DSL.functions_lambdas else arg for arg in args],
+            ret=ret,
+        )
+
+    def __str__(self):
+        return '{} = {} {}'.format(
+            self.ret,
+            Function.get(self.function),
+            ' '.join(str(arg) for arg in self.arg_list),
+        )
+
+    __repr__ = __str__
 
 
 class Program(object):
     """The class of program.
 
-    todo
+    Some special variables:
+    i0, i1, i2, ...: input variables
     """
 
     def __init__(self, input_info, statements):
@@ -182,25 +262,42 @@ class Program(object):
         :param input_info: list
             Input information.
             A list of input type ids.
-        :param statements: list
+        :param statements: list or str
             Statement information.
             A list of statements.
+
+            If it is a string, it will be parsed into statements.
         """
 
-        # Table of variables.
-        # Key: variable names
-        # Value: variable value or None (None means variables have not assigned yet)
-        #
-        # [NOTE] Reserve variables:
-        # i0, i1, i2, ...: input variables
-        # o: output variable
-        self.variables = {
-            'i{}'.format(i): None
-            for i in range(len(input_info))
-        }
+        # List of variables.
+        # [NOTE] The DSL is a SSA (Static Single Assignment) language:
+        # result of each statement is a new read-only variable,
+        # so variables can be put in a list.
+        self.variables = [None for _ in range(len(input_info))]
 
         self.input_info = input_info
+
+        if isinstance(statements, StringTypes):
+            statements = [
+                Statement.from_string(statement_string)
+                for statement_string in statements.strip().split('\n')
+                ]
         self.statements = statements
+
+        # Transfer variable names to indices
+        self.var_name_to_index()
+
+    def var_name_to_index(self):
+        var_index_map = {
+            'i{}'.format(i): Variable('i{}'.format(i), i)
+            for i in range(len(self.input_info))
+            }
+
+        for statement in self.statements:
+            var_index_map[statement.ret] = Variable(statement.ret, len(var_index_map))
+
+        for statement in self.statements:
+            statement.var_name_to_index(var_index_map)
 
     def run(self, input_list):
         """Run the program with given input, return the output.
@@ -216,14 +313,25 @@ class Program(object):
         for i, input_data in enumerate(input_list):
             if not isinstance(input_data, Data):
                 input_data = Data(input_data)
-            self.variables['i{}'.format(i)] = input_data
+            self.variables[i] = input_data
 
         for statement in self.statements:
             statement.run(self.variables)
 
-        return self.variables['o']
+        return self.variables[-1]
 
     __call__ = run
+
+    def __str__(self):
+        return ''.join(
+            '{}\n'.format('i{} = {}'.format(i, Type2String[input_info]))
+            for i, input_info in enumerate(range(len(self.input_info)))
+        ) + ''.join(
+            '{}\n'.format(statement)
+            for statement in self.statements
+        )
+
+    __repr__ = __str__
 
 
 def dfs_program(io_pair_list):
@@ -231,20 +339,19 @@ def dfs_program(io_pair_list):
 
 
 def test():
-    prog = Program(
+    program = Program(
         input_info=[INT, LIST],
-        statements=[
-            Statement(
-                function=2,
-                arg_list=['i0', 'i1'],
-                ret='o',
-            ),
-        ],
+        statements="""\
+c = Sort i1
+d = Take i0 c
+e = Sum d
+""",
     )
 
-    print(prog([2, [2, 3, 4]]))
+    print(program)
+
+    print(program([2, [3, 5, 4, 7, 5]]))
 
 
 if __name__ == '__main__':
     test()
-
