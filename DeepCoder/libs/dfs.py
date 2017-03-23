@@ -3,8 +3,9 @@
 
 from __future__ import print_function, unicode_literals
 
-from dsl import Program, Variable, Statement, DSL
-from dsl_types import get_type_id, IsLambda
+from .dsl import Program, Variable, Statement, DSL
+from .dsl_types import get_type_id, IsLambda
+from .utils.basic import timed
 
 __author__ = 'fyabc'
 
@@ -76,6 +77,7 @@ def _dfs(programs, depth, io_pair_list, used_variables, options):
     return False
 
 
+@timed
 def dfs_program(io_pair_list, **kwargs):
     """DFS to search the program.
 
@@ -118,20 +120,3 @@ def dfs_program(io_pair_list, **kwargs):
         return programs[0]
     else:
         return None
-
-
-def test():
-    result = dfs_program(
-        io_pair_list=[
-            ([2, [3, 5, 4, 7, 5]], 7),
-            ([3, [5, 4, 3, 10, 8, 11]], 12),
-            ([3, [1, 2, 2, 9, 19]], 5),
-        ],
-        max_depth=3,
-    )
-
-    print(result)
-
-
-if __name__ == '__main__':
-    test()

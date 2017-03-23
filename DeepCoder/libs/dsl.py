@@ -9,8 +9,8 @@ from types import StringTypes
 
 import numpy as np
 
-from dsl_types import *
-from config import *
+from .dsl_types import *
+from .config import *
 
 __author__ = 'fyabc'
 
@@ -403,24 +403,3 @@ class Program(object):
     @property
     def result(self):
         return self.variables[-1].value
-
-
-def test():
-    program = Program(
-        input_info=[INT, LIST],
-        statements="""\
-c = Sort i1
-d = Take i0 c
-e = Sum d
-""",
-    )
-
-    print(program)
-
-    print(program([2, [3, 5, 4, 7, 5]]))
-    print(program([3, [5, 4, 3, 10, 8, 11]]))
-    print(program([3, [1, 2, 2, 9, 19]]))
-
-
-if __name__ == '__main__':
-    test()
