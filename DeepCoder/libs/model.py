@@ -13,10 +13,12 @@ class Model(object):
         self.parameters = OrderedDict()
 
     def build_model(self):
+
+        # Input
         pass
 
     def init_np_parameters(self):
         pass
 
-    def init_parameters(self):
+    def init_parameters(self, np_parameters):
         pass

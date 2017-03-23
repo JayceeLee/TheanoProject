@@ -4,34 +4,22 @@
 from __future__ import print_function, unicode_literals
 
 import operator
+from collections import defaultdict
 from types import StringTypes
 
-from dsl_types import INT, LIST, INT2INT, INT2BOOL, INT2INT2INT, Type2String
+import numpy as np
+
+from dsl_types import *
+from config import *
 
 __author__ = 'fyabc'
 
 
-class MapToId(object):
-    """Base class to map all instances to unique ids."""
-
-    _AllInstances = []
-
-    def __init__(self):
-        self.id = len(self._AllInstances)
-        self._AllInstances.append(self)
-
-    @classmethod
-    def get(cls, i):
-        return cls._AllInstances[i]
-
-
-class Function(MapToId):
+class Function(object):
     """The class of function."""
 
-    _AllInstances = []
-
     def __init__(self, name, func, arg_types, ret_type):
-        super(Function, self).__init__()
+        self.id = None
         self.name = name
         self.func = func
         self.arg_types = arg_types
@@ -47,17 +35,17 @@ class Function(MapToId):
 
     __repr__ = __str__
 
+    @property
+    def n_args(self):
+        return len(self.arg_types)
+
 
 class Data(object):
     """The class of data."""
 
     def __init__(self, value):
         self.value = value
-
-        if isinstance(value, (list, tuple)):
-            self.type = LIST
-        else:
-            self.type = INT
+        self.type = get_type_id(value)
 
     def __str__(self):
         return 'Data({})'.format(self.value)
@@ -65,13 +53,11 @@ class Data(object):
     __repr__ = __str__
 
 
-class Lambda(MapToId):
+class Lambda(object):
     """The class of lambda."""
 
-    _AllInstances = []
-
     def __init__(self, name, func, type_):
-        super(Lambda, self).__init__()
+        self.id = None
         self.name = name
         self.value = func
         self.type = type_
@@ -88,14 +74,48 @@ class DSL(object):
     # Table of functions and lambdas. Used for user to simplify the creation of function
     # Key: function or lambda name
     # Value: function or lambda
-    functions_lambdas = {}
+    name_table = {}
+
+    # List of all functions and lambdas.
+    # Map index to function or lambda.
+    _function_lambda_list = []
+
+    # List of all functions.
+    # Value: function id
+    functions = []
+
+    # Table of all lambdas.
+    # Key: lambda type id
+    # Value: lambda id
+    lambdas = defaultdict(list)
+
+    @classmethod
+    def get(cls, index):
+        """Get the function or lambda by its id."""
+
+        return cls._function_lambda_list[index]
+
+    @classmethod
+    def attribute_size(cls):
+        return len(cls._function_lambda_list)
 
     @classmethod
     def _register_function(cls, name, **kwargs):
-        if kwargs.pop('is_lambda', False):
-            cls.functions_lambdas[name] = Lambda(name=name, **kwargs)
+        is_lambda = kwargs.pop('is_lambda', False)
+
+        if is_lambda:
+            target = Lambda(name=name, **kwargs)
         else:
-            cls.functions_lambdas[name] = Function(name=name, **kwargs)
+            target = Function(name=name, **kwargs)
+
+        cls.name_table[name] = target
+        target.id = len(cls._function_lambda_list)
+        cls._function_lambda_list.append(target)
+
+        if is_lambda:
+            cls.lambdas[target.type].append(target.id)
+        else:
+            cls.functions.append(target.id)
 
     @classmethod
     def register_functions_lambdas(cls):
@@ -103,7 +123,8 @@ class DSL(object):
 
         # First-order functions
         cls._register_function('Head', func=lambda xs: xs[0] if len(xs) > 0 else None, arg_types=[LIST], ret_type=INT, )
-        cls._register_function('Last', func=lambda xs: xs[-1] if len(xs) > 0 else None, arg_types=[LIST], ret_type=INT, )
+        cls._register_function('Last', func=lambda xs: xs[-1] if len(xs) > 0 else None, arg_types=[LIST],
+                               ret_type=INT, )
         cls._register_function('Take', func=lambda n, xs: xs[:n], arg_types=[INT, LIST], ret_type=LIST, )
         cls._register_function('Drop', func=lambda n, xs: xs[n:], arg_types=[INT, LIST], ret_type=LIST, )
         cls._register_function('Access', func=lambda n, xs: xs[n] if 0 <= n < len(xs) else None, arg_types=[INT, LIST],
@@ -130,6 +151,7 @@ class DSL(object):
                 ys.append(f(ys[-1], xs[i]))
 
             return ys
+
         cls._register_function('Scanl1', func=_scanl1, arg_types=[INT2INT2INT, LIST], ret_type=LIST, )
 
         # Lambdas
@@ -155,6 +177,7 @@ class DSL(object):
         cls._register_function('Min', func=lambda x, y: min((x, y)), type_=INT2INT2INT, is_lambda=True, )
         cls._register_function('Max', func=lambda x, y: max((x, y)), type_=INT2INT2INT, is_lambda=True, )
 
+
 DSL.register_functions_lambdas()
 
 
@@ -170,12 +193,16 @@ class Variable(object):
 
     __repr__ = __str__
 
+    @classmethod
+    def auto(cls, i, prefix='v'):
+        return cls('{}{}'.format(prefix, i), i)
+
 
 class Statement(object):
     """The class of statement."""
 
     def __init__(self, function, arg_list, ret):
-        """
+        """Build a statement.
 
         :param function: int
             Function id.
@@ -187,6 +214,7 @@ class Statement(object):
         :param ret: str
             Return variable name.
         """
+
         self.ret = ret
         self.function = function
         self.arg_list = arg_list
@@ -208,15 +236,15 @@ class Statement(object):
     def run(self, variables):
         """Run the statement, add the result to `variables`
 
-        :param variables: Variable table
+        :param variables: Variable list
         """
 
-        variables.append(Function.get(self.function)([
-                                                         variables[arg.index] if isinstance(arg,
-                                                                                            Variable) else Lambda.get(
-                                                             arg)
-                                                         for arg in self.arg_list
-                                                         ]))
+        variables.append(
+            DSL.get(self.function)([
+                variables[arg.index] if isinstance(arg, Variable) else DSL.get(arg)
+                for arg in self.arg_list
+            ])
+        )
 
     @classmethod
     def from_string(cls, string):
@@ -234,16 +262,19 @@ class Statement(object):
         args = function_and_args[1:]
 
         return cls(
-            function=DSL.functions_lambdas[function].id,
-            arg_list=[DSL.functions_lambdas[arg].id if arg in DSL.functions_lambdas else arg for arg in args],
+            function=DSL.name_table[function].id,
+            arg_list=[DSL.name_table[arg].id if arg in DSL.name_table else arg for arg in args],
             ret=ret,
         )
 
     def __str__(self):
         return '{} = {} {}'.format(
             self.ret,
-            Function.get(self.function),
-            ' '.join(str(arg) for arg in self.arg_list),
+            DSL.get(self.function),
+            ' '.join(
+                str(arg) if isinstance(arg, Variable) else str(DSL.get(arg))
+                for arg in self.arg_list
+            ),
         )
 
     __repr__ = __str__
@@ -256,7 +287,7 @@ class Program(object):
     i0, i1, i2, ...: input variables
     """
 
-    def __init__(self, input_info, statements):
+    def __init__(self, input_info, statements=None):
         """
 
         :param input_info: list
@@ -281,8 +312,8 @@ class Program(object):
             statements = [
                 Statement.from_string(statement_string)
                 for statement_string in statements.strip().split('\n')
-                ]
-        self.statements = statements
+            ]
+        self.statements = [] if statements is None else statements
 
         # Transfer variable names to indices
         self.var_name_to_index()
@@ -299,6 +330,26 @@ class Program(object):
         for statement in self.statements:
             statement.var_name_to_index(var_index_map)
 
+    def prepare_input(self, input_list):
+        """Set input variables"""
+
+        for i, input_data in enumerate(input_list):
+            if not isinstance(input_data, Data):
+                input_data = Data(input_data)
+            self.variables[i] = input_data
+
+    def run_one_step(self, statement):
+        """Run one statement. Used for DFS."""
+
+        self.statements.append(statement)
+        statement.run(self.variables)
+
+    def roll_back(self):
+        """Roll back one statement. Used for DFS."""
+
+        self.statements.pop()
+        self.variables.pop()
+
     def run(self, input_list):
         """Run the program with given input, return the output.
 
@@ -309,16 +360,16 @@ class Program(object):
             The result.
         """
 
-        # Set input variables
-        for i, input_data in enumerate(input_list):
-            if not isinstance(input_data, Data):
-                input_data = Data(input_data)
-            self.variables[i] = input_data
+        self.prepare_input(input_list)
 
         for statement in self.statements:
             statement.run(self.variables)
 
-        return self.variables[-1]
+        result = self.result
+
+        self.variables = [None for _ in range(len(self.input_info))]
+
+        return result
 
     __call__ = run
 
@@ -333,9 +384,25 @@ class Program(object):
 
     __repr__ = __str__
 
+    def get_attribute(self):
+        """Get the attribute of the program.
 
-def dfs_program(io_pair_list):
-    pass
+        :return numpy.array(shape=(function_lambda_size,), dtype=fX)
+        """
+
+        result = np.zeros(shape=(DSL.attribute_size()), dtype=fX)
+
+        for statement in self.statements:
+            result[statement.function] = 1.0
+            for arg in statement.arg_list:
+                if isinstance(arg, int):
+                    result[arg] = 1.0
+
+        return result
+
+    @property
+    def result(self):
+        return self.variables[-1].value
 
 
 def test():
@@ -351,6 +418,8 @@ e = Sum d
     print(program)
 
     print(program([2, [3, 5, 4, 7, 5]]))
+    print(program([3, [5, 4, 3, 10, 8, 11]]))
+    print(program([3, [1, 2, 2, 9, 19]]))
 
 
 if __name__ == '__main__':
