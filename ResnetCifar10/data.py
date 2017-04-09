@@ -46,7 +46,6 @@ def load_cifar10_data(data_dir=None, one_file=None):
         raise Exception("CIFAR-10 dataset can not be found. Please download the dataset from "
                         "'https://www.cs.toronto.edu/~kriz/cifar.html'.")
 
-    # train_size = ParamConfig['train_size']
     train_size = 50000
 
     if one_file:

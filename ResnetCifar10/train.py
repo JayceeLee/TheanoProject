@@ -8,6 +8,9 @@ Theano code, with user defined optimizers.
 
 from __future__ import print_function
 
+import time
+
+import numpy as np
 import theano
 import theano.tensor as T
 import lasagne
@@ -27,6 +30,7 @@ from lasagne.nonlinearities import softmax, rectify
 from config import C
 from data import prepare_CIFAR10_data, pre_process_CIFAR10_data
 from optimizers import Optimizers
+from utils import get_minibatches_idx
 
 __author__ = 'fyabc'
 
@@ -44,6 +48,7 @@ class ResnetModel(object):
         self.network = self.build_model()
 
         self.build_train_function()
+        self.build_validate_function()
 
     def build_model(self, input_var=None, n=None):
         n = self.O['n'] if n is None else n
@@ -156,6 +161,17 @@ class ResnetModel(object):
         self.f_grad_shared, self.f_update = Optimizers[self.O['optimizer']](
             self.learning_rate, params, grads, [self.input_var], loss)
 
+    def build_validate_function(self):
+        test_preds = lasagne.layers.get_output(self.network, deterministic=True)
+        test_loss = lasagne.objectives.categorical_crossentropy(test_preds,
+                                                                self.target_var)
+        test_loss = test_loss.mean()
+        test_acc = T.mean(T.eq(T.argmax(test_preds, axis=1), self.target_var),
+                          dtype=theano.config.floatX)
+
+        # Compile a second function computing the validation loss and accuracy:
+        self.f_validate = theano.function([self.input_var, self.target_var], [test_loss, test_acc])
+
 
 def main(options):
     C.update(options)
@@ -165,8 +181,63 @@ def main(options):
     x_train, y_train, x_validate, y_validate, x_test, y_test, train_size, validate_size, test_size = \
         pre_process_CIFAR10_data()
 
+    learning_rate = 0.1
+
     for epoch in range(C['num_epoch']):
-        pass
+        start_time = time.time()
+
+        kf = get_minibatches_idx(train_size, C['batch_size'], shuffle=True)
+
+        train_loss = 0.0
+        train_batches = 0
+        for _, train_index in kf:
+            inputs = x_train[train_index]
+            targets = y_train[train_index]
+
+            inputs, targets = prepare_CIFAR10_data(inputs, targets)
+
+            loss = model.f_grad_shared(inputs, targets)
+            model.f_update(learning_rate)
+
+            train_loss += loss
+            train_batches += 1
+
+        kf_valid = get_minibatches_idx(validate_size, C['valid_batch_size'], shuffle=False)
+        valid_loss = 0.0
+        valid_accuracy = 0.0
+        valid_batches = 0
+        for _, valid_index in kf_valid:
+            inputs = x_validate[valid_index]
+            targets = y_validate[valid_index]
+
+            inputs, targets = prepare_CIFAR10_data(inputs, targets)
+
+            loss, accuracy = model.f_validate(inputs, targets)
+
+            valid_loss += loss
+            valid_accuracy += accuracy
+            valid_batches += 1
+
+        print(
+            '''\
+Epoch {} of {} took {:.3f}s
+    training loss:        {:.6f}
+    validation loss:      {:.6f}
+    validation accuracy:  {:.2f} %'''.format(
+                epoch, C['num_epoch'], time.time() - start_time,
+                train_loss / train_batches,
+                valid_loss / valid_batches,
+                valid_accuracy / valid_batches * 100.0,
+            )
+        )
+
+        if epoch + 1 == 41 or epoch + 1 == 61:
+            learning_rate *= 0.1
+            print('Discount learning rate to', learning_rate)
+
+        print('Saving model...', end='')
+        np.savez('cifar10_deep_residual_model.npz', *lasagne.layers.get_all_param_values(model.network))
+        print('Done')
     
 
 if __name__ == '__main__':

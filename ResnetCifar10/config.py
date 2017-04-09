@@ -16,6 +16,8 @@ Config = {
 
     "l2_penalty_factor": 0.0001,
 
+    'batch_size': 128,
+    'valid_batch_size': 500,
     'learning_rate': 0.1,
     "optimizer": 'sgd',
 
